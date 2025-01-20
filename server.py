@@ -21,21 +21,37 @@ def setup_logging():
     console_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
     logging.getLogger().addHandler(console_handler)
 
+clients = []  # Список для хранения всех подключенных клиентов
+
+def broadcast(message, client_socket):
+    """Рассылает сообщение всем клиентам, кроме отправителя."""
+    for client in clients:
+        if client != client_socket:
+            try:
+                client.send(message)
+            except Exception as e:
+                logging.error(f"Ошибка при отправке сообщения клиенту: {e}")
+                client.close()
+                clients.remove(client)
+
 def handle_client(client_socket, addr):
     logging.info(f"Подключен клиент: {addr}")
-    while True:
-        try:
+    clients.append(client_socket)  # Добавляем нового клиента в список
+
+    try:
+        while True:
             request = client_socket.recv(1024)
             if not request:
                 break
             message = request.decode('utf-8')
             logging.info(f"Получено от {addr}: {message}")
-            client_socket.send(request)  # Эхо
-        except Exception as e:
-            logging.error(f"Ошибка при обработке клиента {addr}: {e}")
-            break
-    client_socket.close()
-    logging.info(f"Отключен клиент: {addr}")
+            broadcast(request, client_socket)  # Рассылаем сообщение всем клиентам
+    except Exception as e:
+        logging.error(f"Ошибка при обработке клиента {addr}: {e}")
+    finally:
+        client_socket.close()
+        clients.remove(client_socket)  # Удаляем клиента из списка
+        logging.info(f"Отключен клиент: {addr}")
 
 def start_server(host='localhost', port=9999):
     setup_logging()
