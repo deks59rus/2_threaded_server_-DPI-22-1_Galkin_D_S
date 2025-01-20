@@ -2,12 +2,14 @@ import socket
 import threading
 import logging
 import os
+import uuid
 
 # Настройка логирования
 log_directory = "logs"
 
 if not os.path.exists(log_directory):
     os.makedirs(log_directory)
+
 
 def setup_logging():
     logging.basicConfig(
@@ -21,22 +23,30 @@ def setup_logging():
     console_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
     logging.getLogger().addHandler(console_handler)
 
-clients = []  # Список для хранения всех подключенных клиентов
 
-def broadcast(message, client_socket):
+clients = {}  # Словарь для хранения клиентов и их уникальных идентификаторов
+
+
+def broadcast(message, sender_id):
     """Рассылает сообщение всем клиентам, кроме отправителя."""
-    for client in clients:
-        if client != client_socket:
+    for client_socket, client_id in clients.items():
+        if client_id != sender_id:
             try:
-                client.send(message)
+                client_socket.send(message)
             except Exception as e:
                 logging.error(f"Ошибка при отправке сообщения клиенту: {e}")
-                client.close()
-                clients.remove(client)
+                client_socket.close()
+                del clients[client_socket]
 
-def handle_client(client_socket, addr):
-    logging.info(f"Подключен клиент: {addr}")
-    clients.append(client_socket)  # Добавляем нового клиента в список
+
+def handle_client(client_socket):
+    """Обрабатывает подключение клиента."""
+    client_id = str(uuid.uuid4())  # Генерируем уникальный ID для клиента
+    clients[client_socket] = client_id  # Сохраняем клиента и его ID
+    logging.info(f"Клиент с ID {client_id} подключился.")
+
+    # Уведомляем всех о новом подключении
+    broadcast(f"Клиент с ID {client_id} присоединился к чату.".encode('utf-8'), client_id)
 
     try:
         while True:
@@ -44,14 +54,18 @@ def handle_client(client_socket, addr):
             if not request:
                 break
             message = request.decode('utf-8')
-            logging.info(f"Получено от {addr}: {message}")
-            broadcast(request, client_socket)  # Рассылаем сообщение всем клиентам
+            logging.info(f"Клиент {client_id}: {message}")
+            broadcast(f"Клиент с ID {client_id}: {message}".encode('utf-8'),
+                      client_id)  # Рассылаем сообщение всем клиентам
     except Exception as e:
-        logging.error(f"Ошибка при обработке клиента {addr}: {e}")
+        logging.error(f"Ошибка при обработке клиента {client_id}: {e}")
     finally:
         client_socket.close()
-        clients.remove(client_socket)  # Удаляем клиента из списка
-        logging.info(f"Отключен клиент: {addr}")
+        del clients[client_socket]  # Удаляем клиента из списка
+        logging.info(f"Клиент с ID {client_id} отключился.")
+        # Уведомляем всех об отключении
+        broadcast(f"Клиент с ID {client_id} покинул чат.".encode('utf-8'), client_id)
+
 
 def start_server(host='localhost', port=9999):
     setup_logging()
@@ -63,8 +77,9 @@ def start_server(host='localhost', port=9999):
     while True:
         client_socket, addr = server.accept()
         # Создаем новый поток для обработки клиента
-        client_handler = threading.Thread(target=handle_client, args=(client_socket, addr))
+        client_handler = threading.Thread(target=handle_client, args=(client_socket,))
         client_handler.start()
+
 
 if __name__ == "__main__":
     host = input("Введите IP-адрес сервера (по умолчанию localhost): ") or 'localhost'
