@@ -4,25 +4,22 @@ import logging
 import os
 
 # Настройка логирования
-log_file_count = 3
 log_directory = "logs"
 
 if not os.path.exists(log_directory):
     os.makedirs(log_directory)
 
-def rotate_logs():
-    log_files = sorted(os.listdir(log_directory))
-    while len(log_files) >= log_file_count:
-        os.remove(os.path.join(log_directory, log_files[0]))
-        log_files = sorted(os.listdir(log_directory))
-
 def setup_logging():
-    rotate_logs()
     logging.basicConfig(
-        filename=os.path.join(log_directory, f"server.log"),
+        filename=os.path.join(log_directory, "server.log"),
         level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s'
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        filemode='a'  # Дополнение файла вместо перезаписи
     )
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+    logging.getLogger().addHandler(console_handler)
 
 def handle_client(client_socket, addr):
     logging.info(f"Подключен клиент: {addr}")
@@ -31,7 +28,8 @@ def handle_client(client_socket, addr):
             request = client_socket.recv(1024)
             if not request:
                 break
-            logging.info(f"Получено от {addr}: {request.decode('utf-8')}")
+            message = request.decode('utf-8')
+            logging.info(f"Получено от {addr}: {message}")
             client_socket.send(request)  # Эхо
         except Exception as e:
             logging.error(f"Ошибка при обработке клиента {addr}: {e}")
