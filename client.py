@@ -1,16 +1,22 @@
 import socket
-from time import sleep
 
-sock = socket.socket()
-sock.setblocking(1)
-sock.connect(('10.38.165.12', 9090))
 
-#msg = input()
-msg = "Hi!"
-sock.send(msg.encode())
+def start_client(server_ip, server_port):
+    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client.connect((server_ip, server_port))
 
-data = sock.recv(1024)
+    while True:
+        message = input("Введите сообщение (или 'exit' для выхода): ")
+        if message.lower() == 'exit':
+            break
+        client.send(message.encode('utf-8'))
+        response = client.recv(4096)
+        print(f"Ответ от сервера: {response.decode('utf-8')}")
 
-sock.close()
+    client.close()
 
-print(data.decode())
+
+if __name__ == "__main__":
+    server_ip = input("Введите IP-адрес сервера: ")
+    server_port = int(input("Введите порт сервера: "))
+    start_client(server_ip, server_port)
